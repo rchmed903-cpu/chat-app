@@ -1,0 +1,2 @@
+# Local development - leave empty so Vite proxy handles it
+VITE_SERVER_URL=
