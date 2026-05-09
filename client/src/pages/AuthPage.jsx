@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
@@ -27,15 +27,15 @@ export default function AuthPage() {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // 🔒 Critical: useRef blocks double-clicks synchronously (before React re-renders)
+  // 🔒 Critical: useRef blocks double-clicks synchronously
   const submitLock = useRef(false);
-  // Track if component is mounted to prevent state updates after unmount
   const isMounted = useRef(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     isMounted.current = true;
     return () => { isMounted.current = false; };
   }, []);
@@ -44,11 +44,27 @@ export default function AuthPage() {
     if (isMounted.current) setter(value);
   }, []);
 
+  // 🚀 FORCE REDIRECT — bypasses any React Router issues
+  const forceRedirect = useCallback(() => {
+    console.log("[Auth] Redirecting to chat...");
+    // Try React Router first, fallback to hard redirect
+    try {
+      navigate("/");
+    } catch (e) {
+      console.warn("[Auth] navigate() failed, using fallback", e);
+    }
+    // Hard fallback — ensures we ALWAYS get to the chat page
+    setTimeout(() => {
+      if (window.location.pathname === "/" || window.location.pathname === "/auth") {
+        window.location.href = "/";
+      }
+    }, 300);
+  }, [navigate]);
+
   async function handleSubmit(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Immediate synchronous lock — blocks even the fastest double-click
     if (submitLock.current) {
       console.log("[Auth] Submit blocked — already in progress");
       return;
@@ -56,17 +72,16 @@ export default function AuthPage() {
     submitLock.current = true;
 
     safeSetState(setError, "");
+    safeSetState(setSuccessMsg, "");
     safeSetState(setLoading, true);
 
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
 
-    // Clean inputs
     const payload = {
       username: form.username.trim().toLowerCase(),
       password: form.password.trim(),
     };
 
-    // Client validation
     if (!payload.username || !payload.password) {
       safeSetState(setError, "Username and password are required");
       safeSetState(setLoading, false);
@@ -91,24 +106,35 @@ export default function AuthPage() {
     try {
       console.log("[Auth] Sending request:", endpoint, payload.username);
       const { data } = await axios.post(`${API_URL}${endpoint}`, payload, {
-        timeout: 15000, // 15 second timeout
+        timeout: 15000,
         headers: { "Content-Type": "application/json" },
       });
 
-      console.log("[Auth] Success:", data.user?.username);
+      console.log("[Auth] Response received:", data);
+
+      if (!data.token || !data.user) {
+        throw new Error("Invalid response from server");
+      }
+
+      // Store auth data FIRST
+      console.log("[Auth] Calling login()...");
       login(data.user, data.token);
-      navigate("/");
+
+      safeSetState(setSuccessMsg, isLogin ? "Welcome back!" : "Account created! Redirecting...");
+
+      // Small delay to let auth context update, then redirect
+      setTimeout(() => {
+        forceRedirect();
+      }, 500);
+
     } catch (err) {
-      console.error("[Auth] Error:", err.response?.status, err.response?.data);
+      console.error("[Auth] Error:", err);
       const msg = err.response?.data?.error
+        || err.message
         || (err.code === "ECONNABORTED" ? "Request timed out. Try again." : "Something went wrong");
       safeSetState(setError, msg);
-    } finally {
       safeSetState(setLoading, false);
-      // Small delay before unlocking to prevent rapid-fire clicks
-      setTimeout(() => {
-        submitLock.current = false;
-      }, 500);
+      submitLock.current = false;
     }
   }
 
@@ -116,6 +142,7 @@ export default function AuthPage() {
     if (loading) return;
     setIsLogin((prev) => !prev);
     setError("");
+    setSuccessMsg("");
     setForm({ username: "", password: "" });
   }
 
@@ -296,6 +323,22 @@ export default function AuthPage() {
               }}
             >
               {error}
+            </p>
+          )}
+
+          {successMsg && (
+            <p
+              style={{
+                margin: 0,
+                color: "#4ade80",
+                fontSize: 13,
+                textAlign: "center",
+                background: "rgba(74,222,128,0.08)",
+                padding: "8px 12px",
+                borderRadius: 8,
+              }}
+            >
+              {successMsg}
             </p>
           )}
 
