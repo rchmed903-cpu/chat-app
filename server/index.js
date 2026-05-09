@@ -11,8 +11,7 @@ const server = http.createServer(app);
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://chat-app-git-main-rchmed903-cpus-projects.vercel.app",
-  "https://chat-3iu1hiqdi-rchmed903-cpus-projects.vercel.app",
+  "https://chat-app-iota-seven-33.vercel.app",
 ];
 
 const io = new Server(server, {
