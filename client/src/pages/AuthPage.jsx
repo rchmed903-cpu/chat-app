@@ -3,139 +3,74 @@ import axios from "axios";
 
 const API_URL = import.meta.env.VITE_SERVER_URL || "";
 
-function AppLogo({ size = 48 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
-      <circle cx="20" cy="20" r="20" fill="url(#lg2)" />
-      <path d="M10 14h20M10 20h14M10 26h17" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
-      <circle cx="30" cy="26" r="5" fill="white"/>
-      <circle cx="30" cy="26" r="2.5" fill="url(#lg2)"/>
-      <defs>
-        <linearGradient id="lg2" x1="0" y1="0" x2="40" y2="40">
-          <stop offset="0%" stopColor="#6c63ff"/>
-          <stop offset="100%" stopColor="#3ecfcf"/>
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const submitLock = useRef(false);
+  const lock = useRef(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (submitLock.current) return;
-    submitLock.current = true;
-
+    if (lock.current) return;
+    lock.current = true;
     setError("");
     setLoading(true);
 
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-
     try {
+      const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
       const { data } = await axios.post(`${API_URL}${endpoint}`, {
         username: form.username.trim().toLowerCase(),
         password: form.password.trim(),
-      }, {
-        timeout: 15000,
-        headers: { "Content-Type": "application/json" },
-      });
+      }, { timeout: 15000 });
 
-      // NUCLEAR: Save directly to localStorage + hard redirect (bypasses all React bugs)
+      // 🔴 YOU MUST SEE THIS ALERT — proves new code is running
+      alert("✅ API SUCCESS! Redirecting now...");
+      
       localStorage.setItem("chatwave_token", data.token);
       localStorage.setItem("chatwave_user", JSON.stringify(data.user));
+      
+      // Hard redirect — full page reload, bypasses ALL React bugs
       window.location.replace("/");
 
     } catch (err) {
       setError(err.response?.data?.error || "Something went wrong");
       setLoading(false);
-      submitLock.current = false;
+      lock.current = false;
     }
   }
 
-  function toggleMode() {
-    if (loading) return;
-    setIsLogin((p) => !p);
-    setError("");
-    setForm({ username: "", password: "" });
-  }
-
   return (
-    <div style={{
-      minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)",
-      fontFamily: "system-ui, sans-serif", padding: 16,
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 380, background: "#16162a", borderRadius: 24,
-        padding: 32, boxShadow: "0 20px 60px rgba(108,99,255,0.25)", border: "1px solid #2a2a45",
-      }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28, gap: 10 }}>
-          <AppLogo size={60} />
-          <h1 style={{
-            margin: 0, fontSize: 26, fontWeight: 800,
-            background: "linear-gradient(135deg, #6c63ff, #3ecfcf)",
-            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          }}>ChatWave</h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#8888aa" }}>
-            {isLogin ? "Welcome back 👋" : "Create your account 🚀"}
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }} autoComplete="off">
-          <div>
-            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Username</label>
-            <input
-              type="text" value={form.username}
-              onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
-              placeholder="Enter your username" disabled={loading} required
-              style={{
-                width: "100%", boxSizing: "border-box", background: "#1e1e35",
-                border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
-                fontSize: 14, color: "#e8e8ff", outline: "none",
-              }}
-            />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Password</label>
-            <input
-              type="password" value={form.password}
-              onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-              placeholder="Enter your password" disabled={loading} required
-              style={{
-                width: "100%", boxSizing: "border-box", background: "#1e1e35",
-                border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
-                fontSize: 14, color: "#e8e8ff", outline: "none",
-              }}
-            />
-          </div>
-
-          {error && (
-            <p style={{ margin: 0, color: "#ff6b6b", fontSize: 13, textAlign: "center" }}>{error}</p>
-          )}
-
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", fontFamily: "system-ui, sans-serif" }}>
+      <div style={{ width: "100%", maxWidth: 380, background: "#16162a", borderRadius: 24, padding: 32 }}>
+        <h1 style={{ textAlign: "center", color: "#6c63ff" }}>ChatWave</h1>
+        <p style={{ textAlign: "center", color: "#8888aa" }}>{isLogin ? "Sign In" : "Sign Up"}</p>
+        
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 20 }}>
+          <input
+            type="text" placeholder="Username" required
+            value={form.username}
+            onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
+            style={{ padding: 12, borderRadius: 8, border: "1px solid #2a2a45", background: "#1e1e35", color: "#fff" }}
+          />
+          <input
+            type="password" placeholder="Password" required
+            value={form.password}
+            onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+            style={{ padding: 12, borderRadius: 8, border: "1px solid #2a2a45", background: "#1e1e35", color: "#fff" }}
+          />
+          {error && <p style={{ color: "#ff6b6b", fontSize: 13, textAlign: "center" }}>{error}</p>}
           <button
             type="submit" disabled={loading}
-            style={{
-              width: "100%", background: loading ? "#4a4a6a" : "linear-gradient(135deg, #6c63ff, #3ecfcf)",
-              color: "white", border: "none", borderRadius: 12, padding: "12px",
-              fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1, marginTop: 4,
-            }}
+            style={{ padding: 12, borderRadius: 8, background: "linear-gradient(135deg, #6c63ff, #3ecfcf)", color: "#fff", border: "none", fontWeight: 700, cursor: "pointer" }}
           >
             {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </button>
         </form>
-
-        <p style={{ textAlign: "center", fontSize: 13, color: "#8888aa", marginTop: 20 }}>
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button type="button" onClick={toggleMode} disabled={loading}
-            style={{ background: "none", border: "none", color: "#6c63ff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+        
+        <p style={{ textAlign: "center", color: "#8888aa", marginTop: 16 }}>
+          {isLogin ? "Need an account? " : "Have an account? "}
+          <button onClick={() => { setIsLogin(!isLogin); setError(""); }} style={{ background: "none", border: "none", color: "#6c63ff", cursor: "pointer" }}>
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
