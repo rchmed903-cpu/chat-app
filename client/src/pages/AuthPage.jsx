@@ -5,6 +5,23 @@ import { useAuth } from "../context/AuthContext";
 
 const API_URL = import.meta.env.VITE_SERVER_URL || "";
 
+function AppLogo({ size = 48 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <circle cx="20" cy="20" r="20" fill="url(#lg2)" />
+      <path d="M10 14h20M10 20h14M10 26h17" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="30" cy="26" r="5" fill="white"/>
+      <circle cx="30" cy="26" r="2.5" fill="url(#lg2)"/>
+      <defs>
+        <linearGradient id="lg2" x1="0" y1="0" x2="40" y2="40">
+          <stop offset="0%" stopColor="#6c63ff"/>
+          <stop offset="100%" stopColor="#3ecfcf"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [form, setForm] = useState({ username: "", password: "" });
@@ -30,63 +47,62 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#111b21]">
-      <div className="w-full max-w-sm bg-[#202c33] rounded-2xl p-8 shadow-xl">
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-full bg-[#00a884] flex items-center justify-center mb-3">
-            <svg viewBox="0 0 24 24" className="w-9 h-9 fill-white">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-              <path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.557 4.122 1.529 5.853L.057 23.928a.5.5 0 0 0 .615.615l6.075-1.472A11.944 11.944 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.907 0-3.695-.504-5.24-1.383l-.374-.222-3.875.939.956-3.773-.244-.388A9.956 9.956 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-semibold text-[#e9edef]">ChatApp</h1>
-          <p className="text-sm text-[#8696a0] mt-1">
-            {isLogin ? "Sign in to your account" : "Create your account"}
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)", fontFamily: "system-ui, sans-serif", padding: 16 }}>
+      <div style={{ width: "100%", maxWidth: 380, background: "#16162a", borderRadius: 24, padding: 32, boxShadow: "0 20px 60px rgba(108,99,255,0.3)", border: "1px solid #2a2a45" }}>
+
+        {/* Logo */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28, gap: 10 }}>
+          <AppLogo size={60} />
+          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 800, background: "linear-gradient(135deg, #6c63ff, #3ecfcf)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>ChatWave</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "#8888aa" }}>
+            {isLogin ? "Welcome back 👋" : "Create your account 🚀"}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div>
-            <label className="block text-sm text-[#8696a0] mb-1">Username</label>
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Username</label>
             <input
               type="text"
               value={form.username}
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               placeholder="Enter your username"
-              className="w-full bg-[#2a3942] border border-[#374045] rounded-xl px-4 py-3 text-[#e9edef] text-sm placeholder-[#8696a0] focus:outline-none focus:border-[#00a884] transition"
+              style={{ width: "100%", background: "#1e1e35", border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px", fontSize: 14, color: "#e8e8ff", outline: "none", transition: "border 0.2s" }}
+              onFocus={(e) => e.target.style.borderColor = "#6c63ff"}
+              onBlur={(e) => e.target.style.borderColor = "#2a2a45"}
               required
             />
           </div>
           <div>
-            <label className="block text-sm text-[#8696a0] mb-1">Password</label>
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Password</label>
             <input
               type="password"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               placeholder="Enter your password"
-              className="w-full bg-[#2a3942] border border-[#374045] rounded-xl px-4 py-3 text-[#e9edef] text-sm placeholder-[#8696a0] focus:outline-none focus:border-[#00a884] transition"
+              style={{ width: "100%", background: "#1e1e35", border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px", fontSize: 14, color: "#e8e8ff", outline: "none", transition: "border 0.2s" }}
+              onFocus={(e) => e.target.style.borderColor = "#6c63ff"}
+              onBlur={(e) => e.target.style.borderColor = "#2a2a45"}
               required
             />
           </div>
 
-          {error && (
-            <p className="text-red-400 text-sm text-center">{error}</p>
-          )}
+          {error && <p style={{ margin: 0, color: "#ff6b6b", fontSize: 13, textAlign: "center" }}>{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[#00a884] hover:bg-[#02b48a] text-white font-semibold py-3 rounded-xl transition disabled:opacity-50"
+            style={{ width: "100%", background: "linear-gradient(135deg, #6c63ff, #3ecfcf)", color: "white", border: "none", borderRadius: 12, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: loading ? 0.7 : 1, marginTop: 4 }}
           >
             {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-[#8696a0] mt-6">
+        <p style={{ textAlign: "center", fontSize: 13, color: "#8888aa", marginTop: 20 }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
           <button
             onClick={() => { setIsLogin(!isLogin); setError(""); }}
-            className="text-[#00a884] hover:underline font-medium"
+            style={{ background: "none", border: "none", color: "#6c63ff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
           >
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
