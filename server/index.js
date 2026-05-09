@@ -36,11 +36,15 @@ async function connectDB() {
   client = new MongoClient(MONGO_URL);
   await client.connect();
   db = client.db("chatapp");
+
+  // 🔑 Ensure unique index on username (case-insensitive)
+  await db.collection("users").createIndex({ username: 1 }, { unique: true });
+
   console.log("✅ Connected to MongoDB");
 }
 
 // ─── In-memory online tracking ─────────────────
-const onlineUsers = new Map(); // socketId → { userId, username }
+const onlineUsers = new Map();
 
 function getRoomId(id1, id2) {
   return [id1, id2].sort().join("_");
@@ -75,18 +79,17 @@ app.post("/api/auth/register", async (req, res) => {
     console.log("[REGISTER] Attempt:", { username, hasPassword: !!password });
 
     if (!username || !password) {
-      console.log("[REGISTER] Missing fields");
       return res.status(400).json({ error: "Username and password required" });
     }
 
     if (typeof username !== "string" || typeof password !== "string") {
-      console.log("[REGISTER] Invalid field types");
       return res.status(400).json({ error: "Invalid input types" });
     }
 
-    const trimmedUsername = username.trim();
-    if (!trimmedUsername || !password.trim()) {
-      console.log("[REGISTER] Empty after trim");
+    const trimmedUsername = username.trim().toLowerCase();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedUsername || !trimmedPassword) {
       return res.status(400).json({ error: "Username and password cannot be empty" });
     }
 
@@ -100,7 +103,7 @@ app.post("/api/auth/register", async (req, res) => {
     }
 
     console.log("[REGISTER] Creating new user...");
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(trimmedPassword, 10);
     const result = await db.collection("users").insertOne({
       username: trimmedUsername,
       passwordHash,
@@ -114,6 +117,9 @@ app.post("/api/auth/register", async (req, res) => {
 
   } catch (err) {
     console.error("[REGISTER] ERROR:", err.message);
+    if (err.code === 11000) {
+      return res.status(409).json({ error: "Username already taken" });
+    }
     res.status(500).json({ error: "Server error: " + err.message });
   }
 });
@@ -127,21 +133,24 @@ app.post("/api/auth/login", async (req, res) => {
       return res.status(400).json({ error: "Username and password required" });
     }
 
-    const user = await db.collection("users").findOne({ username: username.trim() });
+    // 🔑 Case-insensitive lookup
+    const trimmedUsername = username.trim().toLowerCase();
+    const user = await db.collection("users").findOne({ username: trimmedUsername });
+
     if (!user) {
-      console.log("[LOGIN] User not found:", username);
+      console.log("[LOGIN] User not found:", trimmedUsername);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    const valid = await bcrypt.compare(password.trim(), user.passwordHash);
     if (!valid) {
-      console.log("[LOGIN] Wrong password for:", username);
+      console.log("[LOGIN] Wrong password for:", trimmedUsername);
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const id = user._id.toString();
     const token = jwt.sign({ id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
-    console.log("[LOGIN] Success:", username);
+    console.log("[LOGIN] Success:", user.username);
     res.json({ token, user: { id, username: user.username } });
 
   } catch (err) {
