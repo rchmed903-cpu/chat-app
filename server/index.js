@@ -27,8 +27,13 @@ const PORT = process.env.PORT || 3001;
 
 // ─── MongoDB ───────────────────────────────────
 let db;
+let client;
+
 async function connectDB() {
-  const client = new MongoClient(MONGO_URL);
+  if (!MONGO_URL) {
+    throw new Error("MONGO_URL is not defined in environment variables");
+  }
+  client = new MongoClient(MONGO_URL);
   await client.connect();
   db = client.db("chatapp");
   console.log("✅ Connected to MongoDB");
@@ -53,70 +58,137 @@ function authMiddleware(req, res, next) {
   }
 }
 
+// ─── Health Check ──────────────────────────────
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    dbConnected: !!db,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // ─── Routes ────────────────────────────────────
 
 app.post("/api/auth/register", async (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password)
-    return res.status(400).json({ error: "Username and password required" });
+  try {
+    const { username, password } = req.body;
+    console.log("[REGISTER] Attempt:", { username, hasPassword: !!password });
 
-  const existing = await db.collection("users").findOne({ username });
-  if (existing) return res.status(409).json({ error: "Username already taken" });
+    if (!username || !password) {
+      console.log("[REGISTER] Missing fields");
+      return res.status(400).json({ error: "Username and password required" });
+    }
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  const result = await db.collection("users").insertOne({
-    username,
-    passwordHash,
-    createdAt: new Date(),
-  });
+    if (typeof username !== "string" || typeof password !== "string") {
+      console.log("[REGISTER] Invalid field types");
+      return res.status(400).json({ error: "Invalid input types" });
+    }
 
-  const id = result.insertedId.toString();
-  const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, user: { id, username } });
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername || !password.trim()) {
+      console.log("[REGISTER] Empty after trim");
+      return res.status(400).json({ error: "Username and password cannot be empty" });
+    }
+
+    console.log("[REGISTER] Checking existing user:", trimmedUsername);
+    const existing = await db.collection("users").findOne({ username: trimmedUsername });
+    console.log("[REGISTER] Existing user result:", existing);
+
+    if (existing) {
+      console.log("[REGISTER] User already exists:", existing.username);
+      return res.status(409).json({ error: "Username already taken" });
+    }
+
+    console.log("[REGISTER] Creating new user...");
+    const passwordHash = await bcrypt.hash(password, 10);
+    const result = await db.collection("users").insertOne({
+      username: trimmedUsername,
+      passwordHash,
+      createdAt: new Date(),
+    });
+
+    const id = result.insertedId.toString();
+    const token = jwt.sign({ id, username: trimmedUsername }, JWT_SECRET, { expiresIn: "7d" });
+    console.log("[REGISTER] Success:", trimmedUsername);
+    res.json({ token, user: { id, username: trimmedUsername } });
+
+  } catch (err) {
+    console.error("[REGISTER] ERROR:", err.message);
+    res.status(500).json({ error: "Server error: " + err.message });
+  }
 });
 
 app.post("/api/auth/login", async (req, res) => {
-  const { username, password } = req.body;
-  const user = await db.collection("users").findOne({ username });
-  if (!user) return res.status(401).json({ error: "Invalid credentials" });
+  try {
+    const { username, password } = req.body;
+    console.log("[LOGIN] Attempt:", { username });
 
-  const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password required" });
+    }
 
-  const id = user._id.toString();
-  const token = jwt.sign({ id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
-  res.json({ token, user: { id, username: user.username } });
+    const user = await db.collection("users").findOne({ username: username.trim() });
+    if (!user) {
+      console.log("[LOGIN] User not found:", username);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      console.log("[LOGIN] Wrong password for:", username);
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const id = user._id.toString();
+    const token = jwt.sign({ id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+    console.log("[LOGIN] Success:", username);
+    res.json({ token, user: { id, username: user.username } });
+
+  } catch (err) {
+    console.error("[LOGIN] ERROR:", err.message);
+    res.status(500).json({ error: "Server error: " + err.message });
+  }
 });
 
 app.get("/api/users", authMiddleware, async (req, res) => {
-  const users = await db.collection("users")
-    .find({ _id: { $ne: new ObjectId(req.user.id) } })
-    .project({ username: 1 })
-    .toArray();
+  try {
+    const users = await db.collection("users")
+      .find({ _id: { $ne: new ObjectId(req.user.id) } })
+      .project({ username: 1 })
+      .toArray();
 
-  const result = users.map((u) => ({
-    id: u._id.toString(),
-    username: u.username,
-    isOnline: [...onlineUsers.values()].some((o) => o.userId === u._id.toString()),
-  }));
+    const result = users.map((u) => ({
+      id: u._id.toString(),
+      username: u.username,
+      isOnline: [...onlineUsers.values()].some((o) => o.userId === u._id.toString()),
+    }));
 
-  res.json(result);
+    res.json(result);
+  } catch (err) {
+    console.error("[USERS] ERROR:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 app.get("/api/messages/:userId", authMiddleware, async (req, res) => {
-  const roomId = getRoomId(req.user.id, req.params.userId);
-  const msgs = await db.collection("messages")
-    .find({ roomId })
-    .sort({ timestamp: 1 })
-    .toArray();
+  try {
+    const roomId = getRoomId(req.user.id, req.params.userId);
+    const msgs = await db.collection("messages")
+      .find({ roomId })
+      .sort({ timestamp: 1 })
+      .toArray();
 
-  res.json(msgs.map((m) => ({
-    id: m._id.toString(),
-    senderId: m.senderId,
-    senderUsername: m.senderUsername,
-    content: m.content,
-    timestamp: m.timestamp,
-  })));
+    res.json(msgs.map((m) => ({
+      id: m._id.toString(),
+      senderId: m.senderId,
+      senderUsername: m.senderUsername,
+      content: m.content,
+      timestamp: m.timestamp,
+    })));
+  } catch (err) {
+    console.error("[MESSAGES] ERROR:", err.message);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // ─── Socket.io ─────────────────────────────────
@@ -138,34 +210,42 @@ io.on("connection", (socket) => {
   io.emit("users:online", [...onlineUsers.values()].map((u) => u.userId));
 
   socket.on("room:join", async (otherUserId) => {
-    const roomId = getRoomId(userId, otherUserId);
-    socket.join(roomId);
-    const msgs = await db.collection("messages")
-      .find({ roomId })
-      .sort({ timestamp: 1 })
-      .toArray();
-    socket.emit("room:history", msgs.map((m) => ({
-      id: m._id.toString(),
-      senderId: m.senderId,
-      senderUsername: m.senderUsername,
-      content: m.content,
-      timestamp: m.timestamp,
-    })));
+    try {
+      const roomId = getRoomId(userId, otherUserId);
+      socket.join(roomId);
+      const msgs = await db.collection("messages")
+        .find({ roomId })
+        .sort({ timestamp: 1 })
+        .toArray();
+      socket.emit("room:history", msgs.map((m) => ({
+        id: m._id.toString(),
+        senderId: m.senderId,
+        senderUsername: m.senderUsername,
+        content: m.content,
+        timestamp: m.timestamp,
+      })));
+    } catch (err) {
+      console.error("[SOCKET room:join] ERROR:", err.message);
+    }
   });
 
   socket.on("message:send", async ({ toUserId, content }) => {
-    if (!content?.trim()) return;
-    const roomId = getRoomId(userId, toUserId);
-    const message = {
-      roomId,
-      senderId: userId,
-      senderUsername: username,
-      content: content.trim(),
-      timestamp: new Date().toISOString(),
-    };
-    const result = await db.collection("messages").insertOne(message);
-    const msg = { ...message, id: result.insertedId.toString() };
-    io.to(roomId).emit("message:receive", { roomId, message: msg });
+    try {
+      if (!content?.trim()) return;
+      const roomId = getRoomId(userId, toUserId);
+      const message = {
+        roomId,
+        senderId: userId,
+        senderUsername: username,
+        content: content.trim(),
+        timestamp: new Date().toISOString(),
+      };
+      const result = await db.collection("messages").insertOne(message);
+      const msg = { ...message, id: result.insertedId.toString() };
+      io.to(roomId).emit("message:receive", { roomId, message: msg });
+    } catch (err) {
+      console.error("[SOCKET message:send] ERROR:", err.message);
+    }
   });
 
   socket.on("typing:start", ({ toUserId }) => {
@@ -186,11 +266,13 @@ io.on("connection", (socket) => {
 });
 
 // ─── Start ─────────────────────────────────────
-connectDB().then(() => {
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+connectDB()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ MongoDB connection failed:", err);
+    process.exit(1);
   });
-}).catch((err) => {
-  console.error("❌ MongoDB connection failed:", err);
-  process.exit(1);
-});
