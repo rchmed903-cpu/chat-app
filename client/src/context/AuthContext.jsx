@@ -1,35 +1,68 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem("chat_user");
-    return stored ? JSON.parse(stored) : null;
-  });
-  const [token, setToken] = useState(() => localStorage.getItem("chat_token") || null);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem("chatwave_token"));
+  const [isReady, setIsReady] = useState(false);
 
-  function login(userData, tokenData) {
+  // Load user from localStorage on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem("chatwave_token");
+    const savedUser = localStorage.getItem("chatwave_user");
+    if (savedToken && savedUser) {
+      try {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem("chatwave_token");
+        localStorage.removeItem("chatwave_user");
+      }
+    }
+    setIsReady(true);
+  }, []);
+
+  const login = useCallback((userData, tokenValue) => {
+    console.log("[AuthContext] login called", userData?.username);
+    localStorage.setItem("chatwave_token", tokenValue);
+    localStorage.setItem("chatwave_user", JSON.stringify(userData));
+    setToken(tokenValue);
     setUser(userData);
-    setToken(tokenData);
-    localStorage.setItem("chat_user", JSON.stringify(userData));
-    localStorage.setItem("chat_token", tokenData);
-  }
+  }, []);
 
-  function logout() {
-    setUser(null);
+  const logout = useCallback(() => {
+    localStorage.removeItem("chatwave_token");
+    localStorage.removeItem("chatwave_user");
     setToken(null);
-    localStorage.removeItem("chat_user");
-    localStorage.removeItem("chat_token");
+    setUser(null);
+  }, []);
+
+  if (!isReady) {
+    return (
+      <div style={{
+        minHeight: "100dvh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#0f0f1a",
+        color: "#8888aa",
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Loading...
+      </div>
+    );
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isReady }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  if (!context) throw new Error("useAuth must be used inside AuthProvider");
+  return context;
 }
