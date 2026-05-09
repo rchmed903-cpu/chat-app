@@ -4,22 +4,20 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import AuthPage from "./pages/AuthPage";
 import ChatPage from "./pages/ChatPage";
 
-function PrivateRoute({ children }) {
-  const { token } = useAuth();
-  return token ? children : <Navigate to="/auth" replace />;
-}
-
-function PublicRoute({ children }) {
-  const { token } = useAuth();
-  return !token ? children : <Navigate to="/" replace />;
-}
-
 function AppRoutes() {
+  const { token } = useAuth();
+
   return (
     <Routes>
-      <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
-      <Route path="/" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="/auth"
+        element={token ? <Navigate to="/" replace /> : <AuthPage />}
+      />
+      <Route
+        path="/"
+        element={token ? <ChatPage /> : <Navigate to="/auth" replace />}
+      />
+      <Route path="*" element={<Navigate to={token ? "/" : "/auth"} replace />} />
     </Routes>
   );
 }

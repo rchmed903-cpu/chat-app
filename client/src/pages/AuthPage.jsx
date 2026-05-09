@@ -1,5 +1,4 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 
@@ -27,11 +26,8 @@ export default function AuthPage() {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState("");
   const { login } = useAuth();
-  const navigate = useNavigate();
 
-  // 🔒 Critical: useRef blocks double-clicks synchronously
   const submitLock = useRef(false);
   const isMounted = useRef(true);
 
@@ -40,192 +36,114 @@ export default function AuthPage() {
     return () => { isMounted.current = false; };
   }, []);
 
-  const safeSetState = useCallback((setter, value) => {
+  const safeSet = useCallback((setter, value) => {
     if (isMounted.current) setter(value);
   }, []);
-
-  // 🚀 FORCE REDIRECT — bypasses any React Router issues
-  const forceRedirect = useCallback(() => {
-    console.log("[Auth] Redirecting to chat...");
-    // Try React Router first, fallback to hard redirect
-    try {
-      navigate("/");
-    } catch (e) {
-      console.warn("[Auth] navigate() failed, using fallback", e);
-    }
-    // Hard fallback — ensures we ALWAYS get to the chat page
-    setTimeout(() => {
-      if (window.location.pathname === "/" || window.location.pathname === "/auth") {
-        window.location.href = "/";
-      }
-    }, 300);
-  }, [navigate]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     e.stopPropagation();
 
-    if (submitLock.current) {
-      console.log("[Auth] Submit blocked — already in progress");
-      return;
-    }
+    if (submitLock.current) return;
     submitLock.current = true;
 
-    safeSetState(setError, "");
-    safeSetState(setSuccessMsg, "");
-    safeSetState(setLoading, true);
+    safeSet(setError, "");
+    safeSet(setLoading, true);
 
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-
     const payload = {
       username: form.username.trim().toLowerCase(),
       password: form.password.trim(),
     };
 
     if (!payload.username || !payload.password) {
-      safeSetState(setError, "Username and password are required");
-      safeSetState(setLoading, false);
+      safeSet(setError, "Username and password are required");
+      safeSet(setLoading, false);
       submitLock.current = false;
       return;
     }
 
     if (payload.username.length < 2) {
-      safeSetState(setError, "Username must be at least 2 characters");
-      safeSetState(setLoading, false);
+      safeSet(setError, "Username must be at least 2 characters");
+      safeSet(setLoading, false);
       submitLock.current = false;
       return;
     }
 
     if (payload.password.length < 3) {
-      safeSetState(setError, "Password must be at least 3 characters");
-      safeSetState(setLoading, false);
+      safeSet(setError, "Password must be at least 3 characters");
+      safeSet(setLoading, false);
       submitLock.current = false;
       return;
     }
 
     try {
-      console.log("[Auth] Sending request:", endpoint, payload.username);
       const { data } = await axios.post(`${API_URL}${endpoint}`, payload, {
         timeout: 15000,
         headers: { "Content-Type": "application/json" },
       });
 
-      console.log("[Auth] Response received:", data);
-
       if (!data.token || !data.user) {
-        throw new Error("Invalid response from server");
+        throw new Error("Server returned invalid data");
       }
 
-      // Store auth data FIRST
-      console.log("[Auth] Calling login()...");
+      // Save auth
       login(data.user, data.token);
 
-      safeSetState(setSuccessMsg, isLogin ? "Welcome back!" : "Account created! Redirecting...");
-
-      // Small delay to let auth context update, then redirect
-      setTimeout(() => {
-        forceRedirect();
-      }, 500);
+      // 🚀 HARD REDIRECT — bypasses any React Router issues completely
+      window.location.replace("/");
 
     } catch (err) {
-      console.error("[Auth] Error:", err);
       const msg = err.response?.data?.error
         || err.message
-        || (err.code === "ECONNABORTED" ? "Request timed out. Try again." : "Something went wrong");
-      safeSetState(setError, msg);
-      safeSetState(setLoading, false);
+        || (err.code === "ECONNABORTED" ? "Request timed out" : "Something went wrong");
+      safeSet(setError, msg);
+      safeSet(setLoading, false);
       submitLock.current = false;
     }
   }
 
   function toggleMode() {
     if (loading) return;
-    setIsLogin((prev) => !prev);
+    setIsLogin((p) => !p);
     setError("");
-    setSuccessMsg("");
     setForm({ username: "", password: "" });
   }
 
-  const btnText = loading
-    ? "Please wait..."
-    : isLogin
-    ? "Sign In"
-    : "Create Account";
-
-  const subtitle = isLogin
-    ? "Welcome back 👋"
-    : "Create your account 🚀";
-
-  const toggleText = isLogin
-    ? "Don't have an account? "
-    : "Already have an account? ";
-
-  const toggleBtnText = isLogin ? "Sign Up" : "Sign In";
-
   return (
-    <div
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)",
-        fontFamily: "system-ui, -apple-system, sans-serif",
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 380,
-          background: "#16162a",
-          borderRadius: 24,
-          padding: 32,
-          boxShadow: "0 20px 60px rgba(108,99,255,0.25)",
-          border: "1px solid #2a2a45",
-        }}
-      >
-        {/* Logo */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: 28,
-            gap: 10,
-          }}
-        >
+    <div style={{
+      minHeight: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)",
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      padding: 16,
+    }}>
+      <div style={{
+        width: "100%",
+        maxWidth: 380,
+        background: "#16162a",
+        borderRadius: 24,
+        padding: 32,
+        boxShadow: "0 20px 60px rgba(108,99,255,0.25)",
+        border: "1px solid #2a2a45",
+      }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28, gap: 10 }}>
           <AppLogo size={60} />
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 26,
-              fontWeight: 800,
-              background: "linear-gradient(135deg, #6c63ff, #3ecfcf)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            ChatWave
-          </h1>
-          <p style={{ margin: 0, fontSize: 13, color: "#8888aa" }}>{subtitle}</p>
+          <h1 style={{
+            margin: 0, fontSize: 26, fontWeight: 800,
+            background: "linear-gradient(135deg, #6c63ff, #3ecfcf)",
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          }}>ChatWave</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "#8888aa" }}>
+            {isLogin ? "Welcome back 👋" : "Create your account 🚀"}
+          </p>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", flexDirection: "column", gap: 14 }}
-          autoComplete="off"
-        >
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }} autoComplete="off">
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: "#8888aa",
-                marginBottom: 6,
-                fontWeight: 500,
-              }}
-            >
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6, fontWeight: 500 }}>
               Username
             </label>
             <input
@@ -233,113 +151,51 @@ export default function AuthPage() {
               name="username"
               autoComplete="username"
               value={form.username}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, username: e.target.value }))
-              }
+              onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
               placeholder="Enter your username"
               disabled={loading}
               required
               style={{
-                width: "100%",
-                boxSizing: "border-box",
-                background: "#1e1e35",
-                border: "1px solid #2a2a45",
-                borderRadius: 12,
-                padding: "11px 14px",
-                fontSize: 14,
-                color: "#e8e8ff",
-                outline: "none",
-                transition: "border 0.2s, box-shadow 0.2s",
-                opacity: loading ? 0.6 : 1,
+                width: "100%", boxSizing: "border-box", background: "#1e1e35",
+                border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
+                fontSize: 14, color: "#e8e8ff", outline: "none",
+                transition: "border 0.2s, box-shadow 0.2s", opacity: loading ? 0.6 : 1,
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "#6c63ff";
-                e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "#2a2a45";
-                e.target.style.boxShadow = "none";
-              }}
+              onFocus={(e) => { e.target.style.borderColor = "#6c63ff"; e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "#2a2a45"; e.target.style.boxShadow = "none"; }}
             />
           </div>
 
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: "#8888aa",
-                marginBottom: 6,
-                fontWeight: 500,
-              }}
-            >
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6, fontWeight: 500 }}>
               Password
             </label>
             <input
               type="password"
               name="password"
-              autoComplete={isLogin ? "current-password" : "new-password"}
-              value={form.password}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, password: e.target.value }))
+              autoComplete={isLogin ? "current-password" : "new-password"
               }
+              value={form.password}
+              onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
               placeholder="Enter your password"
               disabled={loading}
               required
               style={{
-                width: "100%",
-                boxSizing: "border-box",
-                background: "#1e1e35",
-                border: "1px solid #2a2a45",
-                borderRadius: 12,
-                padding: "11px 14px",
-                fontSize: 14,
-                color: "#e8e8ff",
-                outline: "none",
-                transition: "border 0.2s, box-shadow 0.2s",
-                opacity: loading ? 0.6 : 1,
+                width: "100%", boxSizing: "border-box", background: "#1e1e35",
+                border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
+                fontSize: 14, color: "#e8e8ff", outline: "none",
+                transition: "border 0.2s, box-shadow 0.2s", opacity: loading ? 0.6 : 1,
               }}
-              onFocus={(e) => {
-                e.target.style.borderColor = "#6c63ff";
-                e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)";
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = "#2a2a45";
-                e.target.style.boxShadow = "none";
-              }}
+              onFocus={(e) => { e.target.style.borderColor = "#6c63ff"; e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)"; }}
+              onBlur={(e) => { e.target.style.borderColor = "#2a2a45"; e.target.style.boxShadow = "none"; }}
             />
           </div>
 
           {error && (
-            <p
-              style={{
-                margin: 0,
-                color: "#ff6b6b",
-                fontSize: 13,
-                textAlign: "center",
-                background: "rgba(255,107,107,0.08)",
-                padding: "8px 12px",
-                borderRadius: 8,
-              }}
-            >
-              {error}
-            </p>
-          )}
-
-          {successMsg && (
-            <p
-              style={{
-                margin: 0,
-                color: "#4ade80",
-                fontSize: 13,
-                textAlign: "center",
-                background: "rgba(74,222,128,0.08)",
-                padding: "8px 12px",
-                borderRadius: 8,
-              }}
-            >
-              {successMsg}
-            </p>
+            <p style={{
+              margin: 0, color: "#ff6b6b", fontSize: 13, textAlign: "center",
+              background: "rgba(255,107,107,0.08)", padding: "8px 12px", borderRadius: 8,
+            }}>{error}</p>
           )}
 
           <button
@@ -347,52 +203,30 @@ export default function AuthPage() {
             disabled={loading}
             style={{
               width: "100%",
-              background: loading
-                ? "linear-gradient(135deg, #4a4a6a, #2a8a8a)"
-                : "linear-gradient(135deg, #6c63ff, #3ecfcf)",
-              color: "white",
-              border: "none",
-              borderRadius: 12,
-              padding: "12px",
-              fontSize: 15,
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-              marginTop: 4,
-              transition: "all 0.2s ease",
-              userSelect: "none",
-              WebkitUserSelect: "none",
+              background: loading ? "linear-gradient(135deg, #4a4a6a, #2a8a8a)" : "linear-gradient(135deg, #6c63ff, #3ecfcf)",
+              color: "white", border: "none", borderRadius: 12, padding: "12px",
+              fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1, marginTop: 4, transition: "all 0.2s ease",
+              userSelect: "none", WebkitUserSelect: "none",
             }}
           >
-            {btnText}
+            {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </button>
         </form>
 
-        <p
-          style={{
-            textAlign: "center",
-            fontSize: 13,
-            color: "#8888aa",
-            marginTop: 20,
-          }}
-        >
-          {toggleText}
+        <p style={{ textAlign: "center", fontSize: 13, color: "#8888aa", marginTop: 20 }}>
+          {isLogin ? "Don't have an account? " : "Already have an account? "}
           <button
             type="button"
             onClick={toggleMode}
             disabled={loading}
             style={{
-              background: "none",
-              border: "none",
-              color: "#6c63ff",
-              cursor: loading ? "not-allowed" : "pointer",
-              fontWeight: 600,
-              fontSize: 13,
-              opacity: loading ? 0.5 : 1,
-              transition: "opacity 0.2s",
+              background: "none", border: "none", color: "#6c63ff",
+              cursor: loading ? "not-allowed" : "pointer", fontWeight: 600,
+              fontSize: 13, opacity: loading ? 0.5 : 1, transition: "opacity 0.2s",
             }}
           >
-            {toggleBtnText}
+            {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
       </div>
