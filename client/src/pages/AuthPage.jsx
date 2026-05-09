@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
@@ -30,19 +30,46 @@ export default function AuthPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
+  // 🔒 Synchronous guard — blocks double-clicks even before React re-renders
+  const isSubmitting = useRef(false);
+
   async function handleSubmit(e) {
     e.preventDefault();
+
+    // Immediate synchronous block
+    if (isSubmitting.current || loading) return;
+    isSubmitting.current = true;
+
     setError("");
     setLoading(true);
+
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+
+    // Trim inputs before sending
+    const payload = {
+      username: form.username.trim(),
+      password: form.password.trim(),
+    };
+
+    // Basic client-side validation
+    if (!payload.username || !payload.password) {
+      setError("Username and password are required");
+      setLoading(false);
+      isSubmitting.current = false;
+      return;
+    }
+
     try {
-      const { data } = await axios.post(`${API_URL}${endpoint}`, form);
+      const { data } = await axios.post(`${API_URL}${endpoint}`, payload);
       login(data.user, data.token);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.error || "Something went wrong");
+      const msg = err.response?.data?.error || "Something went wrong";
+      setError(msg);
+      console.error("Auth error:", msg);
     } finally {
       setLoading(false);
+      isSubmitting.current = false;
     }
   }
 
@@ -71,6 +98,7 @@ export default function AuthPage() {
               onFocus={(e) => e.target.style.borderColor = "#6c63ff"}
               onBlur={(e) => e.target.style.borderColor = "#2a2a45"}
               required
+              disabled={loading}
             />
           </div>
           <div>
@@ -84,6 +112,7 @@ export default function AuthPage() {
               onFocus={(e) => e.target.style.borderColor = "#6c63ff"}
               onBlur={(e) => e.target.style.borderColor = "#2a2a45"}
               required
+              disabled={loading}
             />
           </div>
 
@@ -92,7 +121,21 @@ export default function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            style={{ width: "100%", background: "linear-gradient(135deg, #6c63ff, #3ecfcf)", color: "white", border: "none", borderRadius: 12, padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer", opacity: loading ? 0.7 : 1, marginTop: 4 }}
+            style={{
+              width: "100%",
+              background: "linear-gradient(135deg, #6c63ff, #3ecfcf)",
+              color: "white",
+              border: "none",
+              borderRadius: 12,
+              padding: "12px",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1,
+              pointerEvents: loading ? "none" : "auto",
+              marginTop: 4,
+              transition: "opacity 0.2s",
+            }}
           >
             {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
           </button>
@@ -102,7 +145,8 @@ export default function AuthPage() {
           {isLogin ? "Don't have an account? " : "Already have an account? "}
           <button
             onClick={() => { setIsLogin(!isLogin); setError(""); }}
-            style={{ background: "none", border: "none", color: "#6c63ff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}
+            disabled={loading}
+            style={{ background: "none", border: "none", color: "#6c63ff", cursor: loading ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 13, opacity: loading ? 0.6 : 1 }}
           >
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
