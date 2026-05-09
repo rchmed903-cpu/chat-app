@@ -1,6 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import axios from "axios";
-import { useAuth } from "../context/AuthContext";
 
 const API_URL = import.meta.env.VITE_SERVER_URL || "";
 
@@ -26,79 +25,35 @@ export default function AuthPage() {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-
   const submitLock = useRef(false);
-  const isMounted = useRef(true);
-
-  useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
-
-  const safeSet = useCallback((setter, value) => {
-    if (isMounted.current) setter(value);
-  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    e.stopPropagation();
-
     if (submitLock.current) return;
     submitLock.current = true;
 
-    safeSet(setError, "");
-    safeSet(setLoading, true);
+    setError("");
+    setLoading(true);
 
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
-    const payload = {
-      username: form.username.trim().toLowerCase(),
-      password: form.password.trim(),
-    };
-
-    if (!payload.username || !payload.password) {
-      safeSet(setError, "Username and password are required");
-      safeSet(setLoading, false);
-      submitLock.current = false;
-      return;
-    }
-
-    if (payload.username.length < 2) {
-      safeSet(setError, "Username must be at least 2 characters");
-      safeSet(setLoading, false);
-      submitLock.current = false;
-      return;
-    }
-
-    if (payload.password.length < 3) {
-      safeSet(setError, "Password must be at least 3 characters");
-      safeSet(setLoading, false);
-      submitLock.current = false;
-      return;
-    }
 
     try {
-      const { data } = await axios.post(`${API_URL}${endpoint}`, payload, {
+      const { data } = await axios.post(`${API_URL}${endpoint}`, {
+        username: form.username.trim().toLowerCase(),
+        password: form.password.trim(),
+      }, {
         timeout: 15000,
         headers: { "Content-Type": "application/json" },
       });
 
-      if (!data.token || !data.user) {
-        throw new Error("Server returned invalid data");
-      }
-
-      // Save auth
-      login(data.user, data.token);
-
-      // 🚀 HARD REDIRECT — bypasses any React Router issues completely
+      // NUCLEAR: Save directly to localStorage + hard redirect (bypasses all React bugs)
+      localStorage.setItem("chatwave_token", data.token);
+      localStorage.setItem("chatwave_user", JSON.stringify(data.user));
       window.location.replace("/");
 
     } catch (err) {
-      const msg = err.response?.data?.error
-        || err.message
-        || (err.code === "ECONNABORTED" ? "Request timed out" : "Something went wrong");
-      safeSet(setError, msg);
-      safeSet(setLoading, false);
+      setError(err.response?.data?.error || "Something went wrong");
+      setLoading(false);
       submitLock.current = false;
     }
   }
@@ -112,22 +67,13 @@ export default function AuthPage() {
 
   return (
     <div style={{
-      minHeight: "100dvh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
+      minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center",
       background: "linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%)",
-      fontFamily: "system-ui, -apple-system, sans-serif",
-      padding: 16,
+      fontFamily: "system-ui, sans-serif", padding: 16,
     }}>
       <div style={{
-        width: "100%",
-        maxWidth: 380,
-        background: "#16162a",
-        borderRadius: 24,
-        padding: 32,
-        boxShadow: "0 20px 60px rgba(108,99,255,0.25)",
-        border: "1px solid #2a2a45",
+        width: "100%", maxWidth: 380, background: "#16162a", borderRadius: 24,
+        padding: 32, boxShadow: "0 20px 60px rgba(108,99,255,0.25)", border: "1px solid #2a2a45",
       }}>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 28, gap: 10 }}>
           <AppLogo size={60} />
@@ -143,71 +89,43 @@ export default function AuthPage() {
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }} autoComplete="off">
           <div>
-            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6, fontWeight: 500 }}>
-              Username
-            </label>
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Username</label>
             <input
-              type="text"
-              name="username"
-              autoComplete="username"
-              value={form.username}
+              type="text" value={form.username}
               onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
-              placeholder="Enter your username"
-              disabled={loading}
-              required
+              placeholder="Enter your username" disabled={loading} required
               style={{
                 width: "100%", boxSizing: "border-box", background: "#1e1e35",
                 border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
                 fontSize: 14, color: "#e8e8ff", outline: "none",
-                transition: "border 0.2s, box-shadow 0.2s", opacity: loading ? 0.6 : 1,
               }}
-              onFocus={(e) => { e.target.style.borderColor = "#6c63ff"; e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)"; }}
-              onBlur={(e) => { e.target.style.borderColor = "#2a2a45"; e.target.style.boxShadow = "none"; }}
             />
           </div>
-
           <div>
-            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6, fontWeight: 500 }}>
-              Password
-            </label>
+            <label style={{ display: "block", fontSize: 12, color: "#8888aa", marginBottom: 6 }}>Password</label>
             <input
-              type="password"
-              name="password"
-              autoComplete={isLogin ? "current-password" : "new-password"
-              }
-              value={form.password}
+              type="password" value={form.password}
               onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-              placeholder="Enter your password"
-              disabled={loading}
-              required
+              placeholder="Enter your password" disabled={loading} required
               style={{
                 width: "100%", boxSizing: "border-box", background: "#1e1e35",
                 border: "1px solid #2a2a45", borderRadius: 12, padding: "11px 14px",
                 fontSize: 14, color: "#e8e8ff", outline: "none",
-                transition: "border 0.2s, box-shadow 0.2s", opacity: loading ? 0.6 : 1,
               }}
-              onFocus={(e) => { e.target.style.borderColor = "#6c63ff"; e.target.style.boxShadow = "0 0 0 3px rgba(108,99,255,0.15)"; }}
-              onBlur={(e) => { e.target.style.borderColor = "#2a2a45"; e.target.style.boxShadow = "none"; }}
             />
           </div>
 
           {error && (
-            <p style={{
-              margin: 0, color: "#ff6b6b", fontSize: 13, textAlign: "center",
-              background: "rgba(255,107,107,0.08)", padding: "8px 12px", borderRadius: 8,
-            }}>{error}</p>
+            <p style={{ margin: 0, color: "#ff6b6b", fontSize: 13, textAlign: "center" }}>{error}</p>
           )}
 
           <button
-            type="submit"
-            disabled={loading}
+            type="submit" disabled={loading}
             style={{
-              width: "100%",
-              background: loading ? "linear-gradient(135deg, #4a4a6a, #2a8a8a)" : "linear-gradient(135deg, #6c63ff, #3ecfcf)",
+              width: "100%", background: loading ? "#4a4a6a" : "linear-gradient(135deg, #6c63ff, #3ecfcf)",
               color: "white", border: "none", borderRadius: 12, padding: "12px",
               fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1, marginTop: 4, transition: "all 0.2s ease",
-              userSelect: "none", WebkitUserSelect: "none",
+              opacity: loading ? 0.7 : 1, marginTop: 4,
             }}
           >
             {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
@@ -216,16 +134,8 @@ export default function AuthPage() {
 
         <p style={{ textAlign: "center", fontSize: 13, color: "#8888aa", marginTop: 20 }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button
-            type="button"
-            onClick={toggleMode}
-            disabled={loading}
-            style={{
-              background: "none", border: "none", color: "#6c63ff",
-              cursor: loading ? "not-allowed" : "pointer", fontWeight: 600,
-              fontSize: 13, opacity: loading ? 0.5 : 1, transition: "opacity 0.2s",
-            }}
-          >
+          <button type="button" onClick={toggleMode} disabled={loading}
+            style={{ background: "none", border: "none", color: "#6c63ff", cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
             {isLogin ? "Sign Up" : "Sign In"}
           </button>
         </p>
